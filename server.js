@@ -1,21 +1,24 @@
-app.use(express.json());
-
-require("dotenv").config();
 const express = require("express");
 const session = require("express-session");
 const axios = require("axios");
+const path = require("path");
 const db = require("./db");
 
 const app = express();
 
+// WICHTIG
 app.use(express.json());
-app.use(express.static("public"));
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || "secret",
+  secret: "secret123",
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: true
 }));
+
+// Static Files
+app.use(express.static(path.join(__dirname, "public")));
+
+// ===== TWITCH LOGIN =====
 
 app.get("/auth/twitch", (req, res) => {
   const redirect = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.TWITCH_CLIENT_ID}&redirect_uri=${process.env.BASE_URL}/auth/twitch/callback&response_type=code&scope=`;
@@ -23,50 +26,89 @@ app.get("/auth/twitch", (req, res) => {
 });
 
 app.get("/auth/twitch/callback", async (req, res) => {
-  res.redirect("/dashboard.html");
+  const code = req.query.code;
+
+  try {
+    const tokenRes = await axios.post("https://id.twitch.tv/oauth2/token", null, {
+      params: {
+        client_id: process.env.TWITCH_CLIENT_ID,
+        client_secret: process.env.TWITCH_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: process.env.BASE_URL + "/auth/twitch/callback"
+      }
+    });
+
+    const access_token = tokenRes.data.access_token;
+
+    const userRes = await axios.get("https://api.twitch.tv/helix/users", {
+      headers: {
+        "Client-ID": process.env.TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${access_token}`
+      }
+    });
+
+    const twitch_name = userRes.data.data[0].login;
+
+    db.get("SELECT * FROM users WHERE twitch_name = ?", [twitch_name], (err, user) => {
+      if (!user) {
+        db.run("INSERT INTO users (twitch_name) VALUES (?)", [twitch_name]);
+        return res.send("Warte auf Freigabe durch Admin");
+      }
+
+      if (!user.approved) {
+        return res.send("Warte auf Freigabe durch Admin");
+      }
+
+      req.session.user = user;
+      res.redirect("/dashboard.html");
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.send("Login Fehler");
+  }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server läuft auf " + PORT));
+// ===== API =====
 
+// GET Clips
 app.get("/api/clips", (req, res) => {
-  const user = req.session.user;
-  if (!user) return res.status(401).send("Nicht eingeloggt");
+  if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
 
-  db.all("SELECT * FROM clips WHERE user_id = ?", [user.id], (err, rows) => {
+  db.all("SELECT * FROM clips WHERE user_id = ?", [req.session.user.id], (err, rows) => {
     if (err) return res.status(500).send("DB Fehler");
     res.json(rows);
   });
 });
 
+// POST Clip
 app.post("/api/clips", (req, res) => {
-  const user = req.session.user;
-  if (!user) return res.status(401).send("Nicht eingeloggt");
+  if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
 
   const { link } = req.body;
 
   if (!link) return res.status(400).send("Kein Link");
 
-  db.get("SELECT COUNT(*) as count FROM clips WHERE user_id = ?", [user.id], (err, row) => {
+  db.get("SELECT COUNT(*) as count FROM clips WHERE user_id = ?", [req.session.user.id], (err, row) => {
     if (row.count >= 5) {
       return res.status(400).send("Max 5 Clips erreicht");
     }
 
-    db.run("INSERT INTO clips (user_id, link) VALUES (?, ?)", [user.id, link], (err) => {
+    db.run("INSERT INTO clips (user_id, link) VALUES (?, ?)", [req.session.user.id, link], (err) => {
       if (err) return res.status(500).send("DB Fehler");
       res.sendStatus(200);
     });
   });
 });
 
-
+// DELETE Clip
 app.delete("/api/clips/:id", (req, res) => {
-  const user = req.session.user;
-  if (!user) return res.status(401).send("Nicht eingeloggt");
+  if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
 
   db.run(
     "DELETE FROM clips WHERE id = ? AND user_id = ?",
-    [req.params.id, user.id],
+    [req.params.id, req.session.user.id],
     (err) => {
       if (err) return res.status(500).send("DB Fehler");
       res.sendStatus(200);
@@ -74,6 +116,7 @@ app.delete("/api/clips/:id", (req, res) => {
   );
 });
 
+// ===== SERVER =====
 
-// update
-// force update
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server läuft auf " + PORT));
