@@ -167,6 +167,12 @@ app.delete("/api/admin/user/:id", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
+app.get("/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.redirect("/");
+  });
+});
+
 app.listen(PORT, () => {
   console.log("Server läuft auf Port " + PORT);
 });
