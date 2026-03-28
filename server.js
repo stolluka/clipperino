@@ -29,6 +29,51 @@ app.get("/auth/twitch/callback", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server läuft auf " + PORT));
 
+app.get("/api/clips", (req, res) => {
+  const user = req.session.user;
+  if (!user) return res.status(401).send("Nicht eingeloggt");
+
+  db.all("SELECT * FROM clips WHERE user_id = ?", [user.id], (err, rows) => {
+    if (err) return res.status(500).send("DB Fehler");
+    res.json(rows);
+  });
+});
+
+app.post("/api/clips", (req, res) => {
+  const user = req.session.user;
+  if (!user) return res.status(401).send("Nicht eingeloggt");
+
+  const { link } = req.body;
+
+  if (!link) return res.status(400).send("Kein Link");
+
+  db.get("SELECT COUNT(*) as count FROM clips WHERE user_id = ?", [user.id], (err, row) => {
+    if (row.count >= 5) {
+      return res.status(400).send("Max 5 Clips erreicht");
+    }
+
+    db.run("INSERT INTO clips (user_id, link) VALUES (?, ?)", [user.id, link], (err) => {
+      if (err) return res.status(500).send("DB Fehler");
+      res.sendStatus(200);
+    });
+  });
+});
+
+
+app.delete("/api/clips/:id", (req, res) => {
+  const user = req.session.user;
+  if (!user) return res.status(401).send("Nicht eingeloggt");
+
+  db.run(
+    "DELETE FROM clips WHERE id = ? AND user_id = ?",
+    [req.params.id, user.id],
+    (err) => {
+      if (err) return res.status(500).send("DB Fehler");
+      res.sendStatus(200);
+    }
+  );
+});
+
 
 // update
 // force update
