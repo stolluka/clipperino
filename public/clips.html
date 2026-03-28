@@ -38,11 +38,11 @@ function getEmbedUrl(url) {
     const parts = url.split("/");
     const clipId = parts.pop().split("?")[0];
 
-    const parent = window.location.hostname;
-
-    return `https://clips.twitch.tv/embed?clip=${clipId}&parent=${parent}&autoplay=false`;
+    return `https://clips.twitch.tv/embed?clip=${clipId}&parent=clipperino-1.onrender.com`;
   } catch {
     return "";
+  }
+}
   }
 }
 }
