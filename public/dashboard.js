@@ -1,3 +1,5 @@
+document.getElementById("loading").style.display = "none";
+
 function getEmbedUrl(url) {
   try {
     if (!url.includes("twitch.tv")) return null;
