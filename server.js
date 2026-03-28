@@ -45,8 +45,7 @@ function requireAuth(req, res, next) {
 // alle dürfen rein
 req.session.user = user;
 return res.redirect("/dashboard.html");
-}
-
+  
 // ======================
 // TEST LOGIN (WICHTIG!!!)
 // ======================
