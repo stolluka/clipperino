@@ -34,9 +34,17 @@ function logout() {
 }
 
 function getEmbedUrl(url) {
-  const parts = url.split("/");
-  const clipId = parts[parts.length - 1];
-  return `https://clips.twitch.tv/embed?clip=${clipId}&parent=${window.location.hostname}`;
+  try {
+    const parts = url.split("/");
+    const clipId = parts.pop().split("?")[0];
+
+    const parent = window.location.hostname;
+
+    return `https://clips.twitch.tv/embed?clip=${clipId}&parent=${parent}&autoplay=false`;
+  } catch {
+    return "";
+  }
+}
 }
 
 async function loadAllClips() {
