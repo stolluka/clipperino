@@ -21,7 +21,7 @@ db.serialize(() => {
 
   db.run(`
     INSERT OR IGNORE INTO users (twitch_name, approved, is_admin)
-    VALUES ('LukasHeimer', 1, 1)
+    VALUES ('lukasheimer', 1, 1)
   `);
 });
 
