@@ -1,32 +1,30 @@
-<script>
-fetch("/api/clips").then(res => {
-  if (res.status === 401) {
-    window.location.href = "/";
-  }
-});
-</script>
-
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Clipperino Dashboard</title>
+  <title>Dashboard</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <nav>
-  <a href="/dashboard.html">Dashboard</a>
-  <a href="/admin.html">Admin</a>
+  <div>
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/admin.html">Admin</a>
+  </div>
   <button onclick="logout()">Logout</button>
 </nav>
 
-<h1>🎬 Clipperino Dashboard</h1>
+<div class="container">
+
+<h1>🎬 Clipperino</h1>
 
 <input id="clipInput" placeholder="Clip Link einfügen">
 <button onclick="addClip()">Hinzufügen</button>
 
 <h2>Deine Clips</h2>
 <ul id="clipList"></ul>
+
+</div>
 
 <script src="dashboard.js"></script>
 
