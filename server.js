@@ -130,3 +130,24 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Server läuft auf Port", PORT);
 });
+
+// ==========================
+// ALLE CLIPS (ADMIN)
+// ==========================
+app.get("/api/all-clips", (req, res) => {
+
+  db.all(`
+    SELECT clips.id, clips.link, users.twitch_name 
+    FROM clips
+    JOIN users ON clips.user_id = users.id
+    ORDER BY clips.id DESC
+  `, (err, rows) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "DB Fehler" });
+    }
+
+    res.json(rows);
+  });
+
+});
