@@ -40,6 +40,11 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Nicht eingeloggt" });
   }
   next();
+
+  // TEMP FIX
+// alle dürfen rein
+req.session.user = user;
+return res.redirect("/dashboard.html");
 }
 
 // ======================
