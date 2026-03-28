@@ -1,196 +1,117 @@
 const express = require("express");
 const session = require("express-session");
-const axios = require("axios");
-const path = require("path");
+const SQLiteStore = require("connect-sqlite3")(session);
 const db = require("./db");
 
 const app = express();
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
+// SESSION (WICHTIG)
 app.use(session({
-  secret: "secret123",
+  store: new SQLiteStore({ db: "sessions.db" }),
+  secret: process.env.SESSION_SECRET || "secret123",
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: false,
+  cookie: {
+    secure: false
+  }
 }));
 
-app.use(express.static(path.join(__dirname, "public")));
+// STATIC FILES
+app.use(express.static("public"));
 
-// ==================== TWITCH LOGIN ====================
 
-app.get("/auth/twitch", (req, res) => {
-  const redirect = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.TWITCH_CLIENT_ID}&redirect_uri=${process.env.BASE_URL}/auth/twitch/callback&response_type=code&scope=`;
-  res.redirect(redirect);
-});
+// ==========================
+// LOGIN CHECK
+// ==========================
+function requireAuth(req, res, next) {
+  if (!req.session.user) {
+    return res.status(401).json({ error: "Nicht eingeloggt" });
+  }
+  next();
+}
 
-app.get("/auth/twitch/callback", async (req, res) => {
-  try {
-    const code = req.query.code;
 
-    const tokenRes = await axios.post("https://id.twitch.tv/oauth2/token", null, {
-      params: {
-        client_id: process.env.TWITCH_CLIENT_ID,
-        client_secret: process.env.TWITCH_CLIENT_SECRET,
-        code: code,
-        grant_type: "authorization_code",
-        redirect_uri: process.env.BASE_URL + "/auth/twitch/callback"
-      }
-    });
+// ==========================
+// CLIPS SPEICHERN
+// ==========================
+app.post("/api/clips", requireAuth, (req, res) => {
+  const { link } = req.body;
+  const userId = req.session.user.id;
 
-    const access_token = tokenRes.data.access_token;
+  if (!link) {
+    return res.status(400).json({ error: "Kein Link" });
+  }
 
-    const userRes = await axios.get("https://api.twitch.tv/helix/users", {
-      headers: {
-        "Client-ID": process.env.TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${access_token}`
-      }
-    });
-
-    const twitch_name = userRes.data.data[0].login;
-
-    db.get("SELECT * FROM users WHERE twitch_name = ?", [twitch_name], (err, user) => {
+  db.run(
+    "INSERT INTO clips (user_id, link) VALUES (?, ?)",
+    [userId, link],
+    function (err) {
       if (err) {
         console.error(err);
-        return res.send("DB Fehler");
+        return res.status(500).json({ error: "DB Fehler" });
       }
 
-      // USER EXISTIERT NICHT
-      if (!user) {
-        db.run(
-          "INSERT INTO users (twitch_name, approved, is_admin) VALUES (?, ?, ?)",
-          [twitch_name, twitch_name === "lukasheimer" ? 1 : 0, twitch_name === "lukasheimer" ? 1 : 0],
-          function (err) {
-            if (err) {
-              console.error(err);
-              return res.send("Insert Fehler");
-            }
+      res.json({ success: true, id: this.lastID });
+    }
+  );
+});
 
-            db.get("SELECT * FROM users WHERE id = ?", [this.lastID], (err, newUser) => {
-              req.session.user = newUser;
 
-              if (newUser.is_admin) {
-                return res.redirect("/admin.html");
-              }
+// ==========================
+// CLIPS LADEN
+// ==========================
+app.get("/api/clips", requireAuth, (req, res) => {
+  const userId = req.session.user.id;
 
-              if (!newUser.approved) {
-                return res.send("Warte auf Freigabe durch Admin");
-              }
-
-              res.redirect("/dashboard.html");
-            });
-          }
-        );
-        return;
+  db.all(
+    "SELECT * FROM clips WHERE user_id = ? ORDER BY id DESC",
+    [userId],
+    (err, rows) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: "DB Fehler" });
       }
 
-      // ADMIN
-      if (user.is_admin) {
-        req.session.user = user;
-        return res.redirect("/admin.html");
+      res.json(rows);
+    }
+  );
+});
+
+
+// ==========================
+// CLIP LÖSCHEN
+// ==========================
+app.delete("/api/clips/:id", requireAuth, (req, res) => {
+  const id = req.params.id;
+  const userId = req.session.user.id;
+
+  db.run(
+    "DELETE FROM clips WHERE id = ? AND user_id = ?",
+    [id, userId],
+    function (err) {
+      if (err) {
+        return res.status(500).json({ error: "Fehler" });
       }
 
-      // NICHT FREIGEGEBEN
-      if (!user.approved) {
-        return res.send("Warte auf Freigabe durch Admin");
-      }
-
-      req.session.user = user;
-      res.redirect("/dashboard.html");
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.send("Login Fehler");
-  }
+      res.json({ success: true });
+    }
+  );
 });
 
-// ==================== CLIPS ====================
 
-app.get("/api/clips", (req, res) => {
-  if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
-
-  db.all("SELECT * FROM clips WHERE user_id = ?", [req.session.user.id], (err, rows) => {
-    if (err) return res.status(500).send("DB Fehler");
-    res.json(rows);
-  });
+// ==========================
+// TEST ROUTE (DEBUG)
+// ==========================
+app.get("/api/test", (req, res) => {
+  res.json({ status: "Server läuft!" });
 });
 
-app.post("/api/clips", (req, res) => {
-  if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
 
-  const { link } = req.body;
-
-  db.get("SELECT COUNT(*) as count FROM clips WHERE user_id = ?", [req.session.user.id], (err, row) => {
-    if (row.count >= 5) return res.status(400).send("Max 5 Clips erreicht");
-
-    db.run("INSERT INTO clips (user_id, link) VALUES (?, ?)", [req.session.user.id, link], () => {
-      res.sendStatus(200);
-    });
-  });
-});
-
-app.delete("/api/clips/:id", (req, res) => {
-  if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
-
-  db.run("DELETE FROM clips WHERE id = ? AND user_id = ?", [req.params.id, req.session.user.id], () => {
-    res.sendStatus(200);
-  });
-});
-
-// ==================== ADMIN ====================
-
-app.get("/api/admin/users", (req, res) => {
-  if (!req.session.user || !req.session.user.is_admin) return res.sendStatus(403);
-
-  db.all("SELECT * FROM users", (err, rows) => {
-    res.json(rows);
-  });
-});
-
-app.post("/api/admin/approve/:id", (req, res) => {
-  if (!req.session.user || !req.session.user.is_admin) return res.sendStatus(403);
-
-  db.run("UPDATE users SET approved = 1 WHERE id = ?", [req.params.id], () => {
-    res.sendStatus(200);
-  });
-});
-
-app.delete("/api/admin/user/:id", (req, res) => {
-  if (!req.session.user || !req.session.user.is_admin) return res.sendStatus(403);
-
-  db.run("DELETE FROM users WHERE id = ?", [req.params.id], () => {
-    res.sendStatus(200);
-  });
-});
-
-// ==================== SERVER ====================
-
+// ==========================
 const PORT = process.env.PORT || 3000;
-
-app.get("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/");
-  });
-});
-
-app.post("/api/all-clips", (req, res) => {
-  const { password } = req.body;
-
-  // 🔒 Passwort (kannst du ändern)
-  if (password !== "Gambo will rein") {
-    return res.status(403).send("Falsches Passwort");
-  }
-
-  db.all(`
-    SELECT clips.*, users.twitch_name 
-    FROM clips
-    JOIN users ON clips.user_id = users.id
-  `, (err, rows) => {
-    if (err) return res.status(500).send("DB Fehler");
-    res.json(rows);
-  });
-});
-
 app.listen(PORT, () => {
-  console.log("Server läuft auf Port " + PORT);
+  console.log("Server läuft auf Port", PORT);
 });
