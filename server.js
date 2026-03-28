@@ -2,10 +2,16 @@ const express = require("express");
 const session = require("express-session");
 const SQLiteStore = require("connect-sqlite3")(session);
 const axios = require("axios");
-const path = require("path");
 const db = require("./db");
 
 const app = express();
+
+// ======================
+// CONFIG (SAFE DEFAULTS)
+// ======================
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
+const CLIENT_ID = process.env.TWITCH_CLIENT_ID || "";
+const CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || "";
 
 // ======================
 // MIDDLEWARE
@@ -20,33 +26,45 @@ app.use(session({
   }),
   secret: process.env.SESSION_SECRET || "secret123",
   resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false
-  }
+  saveUninitialized: false
 }));
 
 app.use(express.static("public"));
 
 // ======================
-// TWITCH LOGIN
+// TEST ROUTE (WICHTIG)
+// ======================
+app.get("/", (req, res) => {
+  res.send("Server läuft!");
+});
+
+// ======================
+// TWITCH LOGIN (SAFE)
 // ======================
 app.get("/auth/twitch", (req, res) => {
-  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.TWITCH_CLIENT_ID}&redirect_uri=${process.env.BASE_URL}/auth/twitch/callback&response_type=code&scope=`;
+  if (!CLIENT_ID) {
+    return res.send("Twitch nicht konfiguriert");
+  }
+
+  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${BASE_URL}/auth/twitch/callback&response_type=code&scope=`;
   res.redirect(url);
 });
 
 app.get("/auth/twitch/callback", async (req, res) => {
   try {
+    if (!CLIENT_ID || !CLIENT_SECRET) {
+      return res.send("Twitch ENV fehlt");
+    }
+
     const code = req.query.code;
 
     const tokenRes = await axios.post("https://id.twitch.tv/oauth2/token", null, {
       params: {
-        client_id: process.env.TWITCH_CLIENT_ID,
-        client_secret: process.env.TWITCH_CLIENT_SECRET,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
         code,
         grant_type: "authorization_code",
-        redirect_uri: process.env.BASE_URL + "/auth/twitch/callback"
+        redirect_uri: BASE_URL + "/auth/twitch/callback"
       }
     });
 
@@ -54,7 +72,7 @@ app.get("/auth/twitch/callback", async (req, res) => {
 
     const userRes = await axios.get("https://api.twitch.tv/helix/users", {
       headers: {
-        "Client-ID": process.env.TWITCH_CLIENT_ID,
+        "Client-ID": CLIENT_ID,
         Authorization: `Bearer ${access_token}`
       }
     });
@@ -63,36 +81,33 @@ app.get("/auth/twitch/callback", async (req, res) => {
 
     db.get("SELECT * FROM users WHERE twitch_name = ?", [twitch_name], (err, user) => {
 
-      // USER EXISTIERT NICHT → ERSTELLEN
       if (!user) {
         db.run(
-          "INSERT INTO users (twitch_name, approved, is_admin) VALUES (?, ?, ?)",
-          [twitch_name, 1, twitch_name === "lukasheimer" ? 1 : 0],
+          "INSERT INTO users (twitch_name, approved, is_admin) VALUES (?, 1, 0)",
+          [twitch_name],
           function () {
             req.session.user = {
               id: this.lastID,
               twitch_name
             };
-
             return res.redirect("/dashboard.html");
           }
         );
         return;
       }
 
-      // LOGIN
       req.session.user = user;
       res.redirect("/dashboard.html");
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("TWITCH ERROR:", err.message);
     res.send("Login Fehler");
   }
 });
 
 // ======================
-// LOGIN TEST (NOTFALL)
+// LOGIN TEST
 // ======================
 app.get("/login-test", (req, res) => {
   req.session.user = {
@@ -113,13 +128,14 @@ function requireAuth(req, res, next) {
 }
 
 // ======================
-// CLIPS (USER)
+// CLIPS USER
 // ======================
 app.get("/api/clips", requireAuth, (req, res) => {
   db.all(
     "SELECT * FROM clips WHERE user_id = ? ORDER BY id DESC",
     [req.session.user.id],
     (err, rows) => {
+      if (err) return res.status(500).send("DB Fehler");
       res.json(rows);
     }
   );
@@ -128,31 +144,26 @@ app.get("/api/clips", requireAuth, (req, res) => {
 app.post("/api/clips", requireAuth, (req, res) => {
   const { link } = req.body;
 
+  if (!link) return res.status(400).send("Kein Link");
+
   db.run(
     "INSERT INTO clips (user_id, link) VALUES (?, ?)",
     [req.session.user.id, link],
-    function () {
+    function (err) {
+      if (err) return res.status(500).send("DB Fehler");
       res.json({ success: true });
     }
   );
 });
 
-app.delete("/api/clips/:id", requireAuth, (req, res) => {
-  db.run(
-    "DELETE FROM clips WHERE id = ? AND user_id = ?",
-    [req.params.id, req.session.user.id],
-    () => res.json({ success: true })
-  );
-});
-
 // ======================
-// ALLE CLIPS (CLIPSABRUF)
+// ADMIN CLIPS (PASSWORT)
 // ======================
 app.post("/api/all-clips", (req, res) => {
   const { password } = req.body;
 
   if (password !== "clips123") {
-    return res.status(403).send("Falsches Passwort");
+    return res.status(403).send("Falsch");
   }
 
   db.all(`
@@ -161,21 +172,13 @@ app.post("/api/all-clips", (req, res) => {
     JOIN users ON clips.user_id = users.id
     ORDER BY clips.id DESC
   `, (err, rows) => {
+    if (err) return res.status(500).send("DB Fehler");
     res.json(rows);
   });
 });
 
 // ======================
-// LOGOUT
-// ======================
-app.get("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/");
-  });
-});
-
-// ======================
-// SERVER
+// SERVER START
 // ======================
 const PORT = process.env.PORT || 3000;
 
