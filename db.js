@@ -18,45 +18,11 @@ db.serialize(() => {
       link TEXT
     )
   `);
+
+  db.run(`
+    INSERT OR IGNORE INTO users (twitch_name, approved, is_admin)
+    VALUES ('LukasHeimer', 1, 1)
+  `);
 });
 
 module.exports = db;
-
-app.get("/api/clips", (req, res) => {
-  const user = req.session.user;
-  if (!user) return res.status(401).send("Nicht eingeloggt");
-
-  db.all("SELECT * FROM clips WHERE user_id = ?", [user.id], (err, rows) => {
-    res.json(rows);
-  });
-});
-
-
-app.post("/api/clips", (req, res) => {
-  const user = req.session.user;
-  if (!user) return res.status(401).send("Nicht eingeloggt");
-
-  const { link } = req.body;
-
-  db.get("SELECT COUNT(*) as count FROM clips WHERE user_id = ?", [user.id], (err, row) => {
-    if (row.count >= 5) {
-      return res.status(400).send("Max 5 Clips erreicht");
-    }
-
-    db.run("INSERT INTO clips (user_id, link) VALUES (?, ?)", [user.id, link], () => {
-      res.sendStatus(200);
-    });
-  });
-});
-
-
-app.delete("/api/clips/:id", (req, res) => {
-  const user = req.session.user;
-  if (!user) return res.status(401).send("Nicht eingeloggt");
-
-  db.run(
-    "DELETE FROM clips WHERE id = ? AND user_id = ?",
-    [req.params.id, user.id],
-    () => res.sendStatus(200)
-  );
-});
