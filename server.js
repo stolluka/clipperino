@@ -173,6 +173,24 @@ app.get("/logout", (req, res) => {
   });
 });
 
+app.post("/api/all-clips", (req, res) => {
+  const { password } = req.body;
+
+  // 🔒 Passwort (kannst du ändern)
+  if (password !== "clips123") {
+    return res.status(403).send("Falsches Passwort");
+  }
+
+  db.all(`
+    SELECT clips.*, users.twitch_name 
+    FROM clips
+    JOIN users ON clips.user_id = users.id
+  `, (err, rows) => {
+    if (err) return res.status(500).send("DB Fehler");
+    res.json(rows);
+  });
+});
+
 app.listen(PORT, () => {
   console.log("Server läuft auf Port " + PORT);
 });
