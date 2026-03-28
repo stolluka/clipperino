@@ -17,17 +17,24 @@ async function loadClips() {
   });
 }
 
+
 async function addClip() {
   const input = document.getElementById("clipInput");
   const link = input.value;
 
   if (!link) return alert("Link fehlt!");
 
-  await fetch("/api/clips", {
+  const res = await fetch("/api/clips", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ link })
   });
+
+  if (!res.ok) {
+    const text = await res.text();
+    alert("Fehler: " + text);
+    return;
+  }
 
   input.value = "";
   loadClips();
