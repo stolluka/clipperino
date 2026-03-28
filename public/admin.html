@@ -1,1 +1,48 @@
-<h1>Admin</h1>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+</head>
+<body>
+
+<h1>👑 Admin Dashboard</h1>
+
+<ul id="userList"></ul>
+
+<script>
+async function loadUsers() {
+  const res = await fetch("/api/admin/users");
+  const users = await res.json();
+
+  const list = document.getElementById("userList");
+  list.innerHTML = "";
+
+  users.forEach(user => {
+    const li = document.createElement("li");
+
+    li.innerHTML = `
+      ${user.twitch_name} 
+      ${user.approved ? "✅" : "❌"}
+      <button onclick="approve(${user.id})">Freigeben</button>
+      <button onclick="removeUser(${user.id})">Löschen</button>
+    `;
+
+    list.appendChild(li);
+  });
+}
+
+async function approve(id) {
+  await fetch("/api/admin/approve/" + id, { method: "POST" });
+  loadUsers();
+}
+
+async function removeUser(id) {
+  await fetch("/api/admin/user/" + id, { method: "DELETE" });
+  loadUsers();
+}
+
+loadUsers();
+</script>
+
+</body>
+</html>
