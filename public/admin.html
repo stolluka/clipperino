@@ -5,6 +5,12 @@
 </head>
 <body>
 
+<nav>
+  <a href="/dashboard.html">Dashboard</a>
+  <a href="/admin.html">Admin</a>
+  <button onclick="logout()">Logout</button>
+</nav>
+
 <h1>👑 Admin Dashboard</h1>
 
 <ul id="userList"></ul>
@@ -39,6 +45,10 @@ async function approve(id) {
 async function removeUser(id) {
   await fetch("/api/admin/user/" + id, { method: "DELETE" });
   loadUsers();
+}
+
+function logout() {
+  fetch("/logout").then(() => location.href = "/");
 }
 
 loadUsers();
