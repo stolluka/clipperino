@@ -6,18 +6,31 @@
 </head>
 <body>
 
+<nav>
+  <div>
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/admin.html">Admin</a>
+    <a href="/clips.html">Clipsabruf</a>
+  </div>
+  <button onclick="logout()">Logout</button>
+</nav>
+
 <div class="container">
 
 <h1>🔒 Clipsabruf</h1>
 
 <input id="password" placeholder="Passwort eingeben">
-<button onclick="loadAllClips()">Anzeigen</button>
+<button onclick="loadAllClips()">Clips anzeigen</button>
 
 <div id="clips"></div>
 
 </div>
 
 <script>
+function logout() {
+  fetch("/logout").then(() => location.href = "/");
+}
+
 function getEmbedUrl(url) {
   const parts = url.split("/");
   const clipId = parts[parts.length - 1];
@@ -36,7 +49,7 @@ async function loadAllClips() {
   });
 
   if (!res.ok) {
-    alert("Falsches Passwort");
+    alert("❌ Falsches Passwort");
     return;
   }
 
