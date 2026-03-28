@@ -1,38 +1,44 @@
 async function loadClips() {
   const res = await fetch("/api/clips");
-  const clips = await res.json();
 
+  if (res.status === 401) {
+    window.location.href = "/";
+    return;
+  }
+
+  const clips = await res.json();
   const list = document.getElementById("clipList");
+
   list.innerHTML = "";
 
-  clips.forEach((clip) => {
+  clips.forEach(clip => {
     const li = document.createElement("li");
 
     li.innerHTML = `
       <a href="${clip.link}" target="_blank">${clip.link}</a>
-      <button onclick="deleteClip(${clip.id})">❌</button>
+      <button class="delete-btn" onclick="deleteClip(${clip.id})">X</button>
     `;
 
     list.appendChild(li);
   });
 }
 
-
 async function addClip() {
   const input = document.getElementById("clipInput");
   const link = input.value;
 
-  if (!link) return alert("Link fehlt!");
+  if (!link) return;
 
   const res = await fetch("/api/clips", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({ link })
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    alert("Fehler: " + text);
+    alert(await res.text());
     return;
   }
 
