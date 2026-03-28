@@ -16,7 +16,7 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// ===== TWITCH LOGIN =====
+// ==================== TWITCH LOGIN ====================
 
 app.get("/auth/twitch", (req, res) => {
   const redirect = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.TWITCH_CLIENT_ID}&redirect_uri=${process.env.BASE_URL}/auth/twitch/callback&response_type=code&scope=`;
@@ -24,14 +24,14 @@ app.get("/auth/twitch", (req, res) => {
 });
 
 app.get("/auth/twitch/callback", async (req, res) => {
-  const code = req.query.code;
-
   try {
+    const code = req.query.code;
+
     const tokenRes = await axios.post("https://id.twitch.tv/oauth2/token", null, {
       params: {
         client_id: process.env.TWITCH_CLIENT_ID,
         client_secret: process.env.TWITCH_CLIENT_SECRET,
-        code,
+        code: code,
         grant_type: "authorization_code",
         redirect_uri: process.env.BASE_URL + "/auth/twitch/callback"
       }
@@ -49,72 +49,47 @@ app.get("/auth/twitch/callback", async (req, res) => {
     const twitch_name = userRes.data.data[0].login;
 
     db.get("SELECT * FROM users WHERE twitch_name = ?", [twitch_name], (err, user) => {
-  if (err) {
-    console.error(err);
-    return res.send("DB Fehler");
-  }
-
-  // USER EXISTIERT NICHT → ERSTELLEN + DIREKT EINLOGGEN
-  if (!user) {
-    db.run(
-      "INSERT INTO users (twitch_name, approved, is_admin) VALUES (?, ?, ?)",
-      [twitch_name, twitch_name === "LukasHeimer" ? 1 : 0, twitch_name === "LukasHeimer" ? 1 : 0],
-      function (err) {
-        if (err) {
-          console.error(err);
-          return res.send("Insert Fehler");
-        }
-
-        // User sofort holen
-        db.get("SELECT * FROM users WHERE id = ?", [this.lastID], (err, newUser) => {
-          req.session.user = newUser;
-
-          if (newUser.is_admin) {
-            return res.redirect("/admin.html");
-          }
-
-          if (!newUser.approved) {
-            return res.send("Warte auf Freigabe durch Admin");
-          }
-
-          res.redirect("/dashboard.html");
-        });
+      if (err) {
+        console.error(err);
+        return res.send("DB Fehler");
       }
-    );
-    return;
-  }
 
-  // ADMIN
-  if (user.is_admin) {
-    req.session.user = user;
-    return res.redirect("/admin.html");
-  }
-
-  // NICHT FREIGEGEBEN
-  if (!user.approved) {
-    return res.send("Warte auf Freigabe durch Admin");
-  }
-
-  req.session.user = user;
-  res.redirect("/dashboard.html");
-});
-
-      // NEUER USER → automatisch speichern
+      // USER EXISTIERT NICHT
       if (!user) {
-        db.run("INSERT INTO users (twitch_name, approved, is_admin) VALUES (?, ?, ?)",
-          [twitch_name, twitch_name === "LukasHeimer" ? 1 : 0, twitch_name === "LukasHeimer" ? 1 : 0]
-        );
+        db.run(
+          "INSERT INTO users (twitch_name, approved, is_admin) VALUES (?, ?, ?)",
+          [twitch_name, twitch_name === "lukasheimer" ? 1 : 0, twitch_name === "lukasheimer" ? 1 : 0],
+          function (err) {
+            if (err) {
+              console.error(err);
+              return res.send("Insert Fehler");
+            }
 
-        return res.send("Registriert! Seite neu laden.");
+            db.get("SELECT * FROM users WHERE id = ?", [this.lastID], (err, newUser) => {
+              req.session.user = newUser;
+
+              if (newUser.is_admin) {
+                return res.redirect("/admin.html");
+              }
+
+              if (!newUser.approved) {
+                return res.send("Warte auf Freigabe durch Admin");
+              }
+
+              res.redirect("/dashboard.html");
+            });
+          }
+        );
+        return;
       }
 
-      // ADMIN darf immer rein
+      // ADMIN
       if (user.is_admin) {
         req.session.user = user;
         return res.redirect("/admin.html");
       }
 
-      // NORMAL USER → muss approved sein
+      // NICHT FREIGEGEBEN
       if (!user.approved) {
         return res.send("Warte auf Freigabe durch Admin");
       }
@@ -129,12 +104,13 @@ app.get("/auth/twitch/callback", async (req, res) => {
   }
 });
 
-// ===== CLIPS =====
+// ==================== CLIPS ====================
 
 app.get("/api/clips", (req, res) => {
   if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
 
   db.all("SELECT * FROM clips WHERE user_id = ?", [req.session.user.id], (err, rows) => {
+    if (err) return res.status(500).send("DB Fehler");
     res.json(rows);
   });
 });
@@ -161,10 +137,10 @@ app.delete("/api/clips/:id", (req, res) => {
   });
 });
 
-// ===== ADMIN =====
+// ==================== ADMIN ====================
 
 app.get("/api/admin/users", (req, res) => {
-  if (!req.session.user?.is_admin) return res.sendStatus(403);
+  if (!req.session.user || !req.session.user.is_admin) return res.sendStatus(403);
 
   db.all("SELECT * FROM users", (err, rows) => {
     res.json(rows);
@@ -172,7 +148,7 @@ app.get("/api/admin/users", (req, res) => {
 });
 
 app.post("/api/admin/approve/:id", (req, res) => {
-  if (!req.session.user?.is_admin) return res.sendStatus(403);
+  if (!req.session.user || !req.session.user.is_admin) return res.sendStatus(403);
 
   db.run("UPDATE users SET approved = 1 WHERE id = ?", [req.params.id], () => {
     res.sendStatus(200);
@@ -180,14 +156,17 @@ app.post("/api/admin/approve/:id", (req, res) => {
 });
 
 app.delete("/api/admin/user/:id", (req, res) => {
-  if (!req.session.user?.is_admin) return res.sendStatus(403);
+  if (!req.session.user || !req.session.user.is_admin) return res.sendStatus(403);
 
   db.run("DELETE FROM users WHERE id = ?", [req.params.id], () => {
     res.sendStatus(200);
   });
 });
 
-// ===== SERVER =====
+// ==================== SERVER ====================
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server läuft auf " + PORT));
+
+app.listen(PORT, () => {
+  console.log("Server läuft auf Port " + PORT);
+});
