@@ -24,4 +24,5 @@ app.get("/auth/twitch/callback", async (req, res) => {
   res.send("Login funktioniert!");
 });
 
-app.listen(3000, () => console.log("Server läuft"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server läuft auf " + PORT));
