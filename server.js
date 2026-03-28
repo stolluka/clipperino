@@ -3,6 +3,9 @@ const session = require("express-session");
 const SQLiteStore = require("connect-sqlite3")(session);
 const db = require("./db");
 
+
+const BASE_URL = "https://clipperino-1.onrender.com";
+
 const app = express();
 
 // ======================
