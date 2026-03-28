@@ -1,15 +1,39 @@
-document.getElementById("loading").style.display = "none";
-
-function getEmbedUrl(url) {
+function getEmbed(url) {
   try {
-    if (!url.includes("twitch.tv")) return null;
+    // TWITCH
+    if (url.includes("twitch.tv")) {
+      const id = url.split("/").pop();
+      return `<iframe src="https://clips.twitch.tv/embed?clip=${id}&parent=${window.location.hostname}"></iframe>`;
+    }
 
-    const parts = url.split("/");
-    const clipId = parts[parts.length - 1];
+    // YOUTUBE
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      let id = "";
 
-    return `https://clips.twitch.tv/embed?clip=${clipId}&parent=${window.location.hostname}`;
+      if (url.includes("youtu.be")) {
+        id = url.split("/").pop();
+      } else {
+        const params = new URL(url).searchParams;
+        id = params.get("v");
+      }
+
+      return `<iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe>`;
+    }
+
+    // TIKTOK
+    if (url.includes("tiktok.com")) {
+      return `<blockquote class="tiktok-embed"><a href="${url}"></a></blockquote>
+      <script async src="https://www.tiktok.com/embed.js"></script>`;
+    }
+
+    // INSTAGRAM
+    if (url.includes("instagram.com")) {
+      return `<iframe src="${url}/embed"></iframe>`;
+    }
+
+    return `<a href="${url}" target="_blank">${url}</a>`;
   } catch {
-    return null;
+    return `<a href="${url}" target="_blank">${url}</a>`;
   }
 }
 
@@ -30,11 +54,9 @@ async function loadClips() {
     const div = document.createElement("div");
     div.className = "clip-card";
 
-    const embed = getEmbedUrl(clip.link);
-
     div.innerHTML = `
       <div>${clip.link}</div>
-      ${embed ? `<iframe src="${embed}" allowfullscreen></iframe>` : ""}
+      ${getEmbed(clip.link)}
       <button class="delete-btn" onclick="deleteClip(${clip.id})">Löschen</button>
     `;
 
@@ -50,7 +72,9 @@ async function addClip() {
 
   const res = await fetch("/api/clips", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({ link })
   });
 
