@@ -1,19 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Dashboard</title>
+  <title>Admin</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <nav>
-  <a href="/dashboard.html">Dashboard</a>
-  <a href="/admin.html">Admin</a>
+  <div>
+    <a href="/dashboard.html">Dashboard</a>
+  </div>
   <button onclick="logout()">Logout</button>
 </nav>
 
-<h1>👑 Admin Dashboard</h1>
-
+<div class="container">
+<h1>👑 Admin Panel</h1>
 <ul id="userList"></ul>
+</div>
 
 <script>
 async function loadUsers() {
@@ -24,16 +27,18 @@ async function loadUsers() {
   list.innerHTML = "";
 
   users.forEach(user => {
-    const li = document.createElement("li");
+    const div = document.createElement("div");
+    div.className = "clip-card";
 
-    li.innerHTML = `
-      ${user.twitch_name} 
-      ${user.approved ? "✅" : "❌"}
+    div.innerHTML = `
+      <strong>${user.twitch_name}</strong><br>
+      Status: ${user.approved ? "✅ Freigegeben" : "❌ Wartend"}
+      <br><br>
       <button onclick="approve(${user.id})">Freigeben</button>
-      <button onclick="removeUser(${user.id})">Löschen</button>
+      <button class="delete-btn" onclick="removeUser(${user.id})">Löschen</button>
     `;
 
-    list.appendChild(li);
+    list.appendChild(div);
   });
 }
 
