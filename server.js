@@ -49,6 +49,55 @@ app.get("/auth/twitch/callback", async (req, res) => {
     const twitch_name = userRes.data.data[0].login;
 
     db.get("SELECT * FROM users WHERE twitch_name = ?", [twitch_name], (err, user) => {
+  if (err) {
+    console.error(err);
+    return res.send("DB Fehler");
+  }
+
+  // USER EXISTIERT NICHT → ERSTELLEN + DIREKT EINLOGGEN
+  if (!user) {
+    db.run(
+      "INSERT INTO users (twitch_name, approved, is_admin) VALUES (?, ?, ?)",
+      [twitch_name, twitch_name === "LukasHeimer" ? 1 : 0, twitch_name === "LukasHeimer" ? 1 : 0],
+      function (err) {
+        if (err) {
+          console.error(err);
+          return res.send("Insert Fehler");
+        }
+
+        // User sofort holen
+        db.get("SELECT * FROM users WHERE id = ?", [this.lastID], (err, newUser) => {
+          req.session.user = newUser;
+
+          if (newUser.is_admin) {
+            return res.redirect("/admin.html");
+          }
+
+          if (!newUser.approved) {
+            return res.send("Warte auf Freigabe durch Admin");
+          }
+
+          res.redirect("/dashboard.html");
+        });
+      }
+    );
+    return;
+  }
+
+  // ADMIN
+  if (user.is_admin) {
+    req.session.user = user;
+    return res.redirect("/admin.html");
+  }
+
+  // NICHT FREIGEGEBEN
+  if (!user.approved) {
+    return res.send("Warte auf Freigabe durch Admin");
+  }
+
+  req.session.user = user;
+  res.redirect("/dashboard.html");
+});
 
       // NEUER USER → automatisch speichern
       if (!user) {
