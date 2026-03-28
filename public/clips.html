@@ -1,83 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-  <title>Clips Übersicht</title>
+  <meta charset="UTF-8">
+  <title>Clipsabruf</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<nav>
-  <div>
-    <a href="/dashboard.html">Dashboard</a>
-    <a href="/admin.html">Admin</a>
-    <button onclick="window.location.href='/clips.html'">
-  📺 Clipsabruf
-</button>
-  </div>
-  <button onclick="logout()">Logout</button>
-</nav>
+<div class="nav">
+  <a href="dashboard.html">Dashboard</a>
+  <a href="admin.html">Admin</a>
+</div>
 
-<div class="container">
+<h1>📺 Clipsabruf</h1>
 
-<h1>🔒 Clipsabruf</h1>
-
-<input id="password" placeholder="Passwort eingeben">
-<button onclick="loadAllClips()">Clips anzeigen</button>
+<div class="login-box">
+  <input type="password" id="password" placeholder="Passwort">
+  <button onclick="loadClips()">Clips laden</button>
+</div>
 
 <div id="clips"></div>
 
-</div>
-
-<script>
-function logout() {
-  fetch("/logout").then(() => location.href = "/");
-}
-
-function getEmbedUrl(url) {
-  try {
-    const parts = url.split("/");
-    const clipId = parts.pop().split("?")[0];
-
-    return `https://clips.twitch.tv/embed?clip=${clipId}&parent=clipperino-1.onrender.com`;
-  } catch {
-    return "";
-  }
-}
-  }
-}
-}
-
-async function loadAllClips() {
-  const password = document.getElementById("password").value;
-
-  const res = await fetch("/api/all-clips", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ password })
-  });
-
-  if (!res.ok) {
-    alert("❌ Falsches Passwort");
-    return;
-  }
-
-  const clips = await res.json();
-  const div = document.getElementById("clips");
-
-  div.innerHTML = "";
-
-  clips.forEach(c => {
-    div.innerHTML += `
-      <div class="clip-card">
-        <strong>${c.twitch_name}</strong>
-        <iframe src="${getEmbedUrl(c.link)}" allowfullscreen></iframe>
-      </div>
-    `;
-  });
-}
-</script>
+<script src="clips.js"></script>
 
 </body>
 </html>
