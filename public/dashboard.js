@@ -1,37 +1,41 @@
-let clips = [];
+async function loadClips() {
+  const res = await fetch("/api/clips");
+  const clips = await res.json();
 
-function addClip() {
-  const input = document.getElementById("clipInput");
-  const link = input.value;
-
-  if (!link) return alert("Bitte Link eingeben!");
-
-  if (clips.length >= 5) {
-    return alert("Maximal 5 Clips erlaubt!");
-  }
-
-  clips.push(link);
-  input.value = "";
-  renderClips();
-}
-
-function removeClip(index) {
-  clips.splice(index, 1);
-  renderClips();
-}
-
-function renderClips() {
   const list = document.getElementById("clipList");
   list.innerHTML = "";
 
-  clips.forEach((clip, index) => {
+  clips.forEach((clip) => {
     const li = document.createElement("li");
 
     li.innerHTML = `
-      <a href="${clip}" target="_blank">${clip}</a>
-      <button onclick="removeClip(${index})">❌</button>
+      <a href="${clip.link}" target="_blank">${clip.link}</a>
+      <button onclick="deleteClip(${clip.id})">❌</button>
     `;
 
     list.appendChild(li);
   });
 }
+
+async function addClip() {
+  const input = document.getElementById("clipInput");
+  const link = input.value;
+
+  if (!link) return alert("Link fehlt!");
+
+  await fetch("/api/clips", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ link })
+  });
+
+  input.value = "";
+  loadClips();
+}
+
+async function deleteClip(id) {
+  await fetch("/api/clips/" + id, { method: "DELETE" });
+  loadClips();
+}
+
+loadClips();
