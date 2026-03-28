@@ -177,7 +177,7 @@ app.post("/api/all-clips", (req, res) => {
   const { password } = req.body;
 
   // 🔒 Passwort (kannst du ändern)
-  if (password !== "clips123") {
+  if (password !== "Gambo will rein") {
     return res.status(403).send("Falsches Passwort");
   }
 
