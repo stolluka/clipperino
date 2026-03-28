@@ -6,14 +6,27 @@
 </head>
 <body>
 
-  <h1>🎬 Clipperino Dashboard</h1>
+<nav>
+  <a href="/dashboard.html">Dashboard</a>
+  <a href="/admin.html">Admin</a>
+  <button onclick="logout()">Logout</button>
+</nav>
 
-  <input id="clipInput" placeholder="Clip Link einfügen">
-  <button onclick="addClip()">Hinzufügen</button>
+<h1>🎬 Clipperino Dashboard</h1>
 
-  <h2>Deine Clips</h2>
-  <ul id="clipList"></ul>
+<input id="clipInput" placeholder="Clip Link einfügen">
+<button onclick="addClip()">Hinzufügen</button>
 
-  <script src="dashboard.js"></script>
+<h2>Deine Clips</h2>
+<ul id="clipList"></ul>
+
+<script src="dashboard.js"></script>
+
+<script>
+function logout() {
+  fetch("/logout").then(() => location.href = "/");
+}
+</script>
+
 </body>
 </html>
