@@ -6,7 +6,6 @@ const db = require("./db");
 
 const app = express();
 
-// WICHTIG
 app.use(express.json());
 
 app.use(session({
@@ -15,7 +14,6 @@ app.use(session({
   saveUninitialized: true
 }));
 
-// Static Files
 app.use(express.static(path.join(__dirname, "public")));
 
 // ===== TWITCH LOGIN =====
@@ -51,11 +49,23 @@ app.get("/auth/twitch/callback", async (req, res) => {
     const twitch_name = userRes.data.data[0].login;
 
     db.get("SELECT * FROM users WHERE twitch_name = ?", [twitch_name], (err, user) => {
+
+      // NEUER USER → automatisch speichern
       if (!user) {
-        db.run("INSERT INTO users (twitch_name) VALUES (?)", [twitch_name]);
-        return res.send("Warte auf Freigabe durch Admin");
+        db.run("INSERT INTO users (twitch_name, approved, is_admin) VALUES (?, ?, ?)",
+          [twitch_name, twitch_name === "LukasHeimer" ? 1 : 0, twitch_name === "LukasHeimer" ? 1 : 0]
+        );
+
+        return res.send("Registriert! Seite neu laden.");
       }
 
+      // ADMIN darf immer rein
+      if (user.is_admin) {
+        req.session.user = user;
+        return res.redirect("/admin.html");
+      }
+
+      // NORMAL USER → muss approved sein
       if (!user.approved) {
         return res.send("Warte auf Freigabe durch Admin");
       }
@@ -70,50 +80,62 @@ app.get("/auth/twitch/callback", async (req, res) => {
   }
 });
 
-// ===== API =====
+// ===== CLIPS =====
 
-// GET Clips
 app.get("/api/clips", (req, res) => {
   if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
 
   db.all("SELECT * FROM clips WHERE user_id = ?", [req.session.user.id], (err, rows) => {
-    if (err) return res.status(500).send("DB Fehler");
     res.json(rows);
   });
 });
 
-// POST Clip
 app.post("/api/clips", (req, res) => {
   if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
 
   const { link } = req.body;
 
-  if (!link) return res.status(400).send("Kein Link");
-
   db.get("SELECT COUNT(*) as count FROM clips WHERE user_id = ?", [req.session.user.id], (err, row) => {
-    if (row.count >= 5) {
-      return res.status(400).send("Max 5 Clips erreicht");
-    }
+    if (row.count >= 5) return res.status(400).send("Max 5 Clips erreicht");
 
-    db.run("INSERT INTO clips (user_id, link) VALUES (?, ?)", [req.session.user.id, link], (err) => {
-      if (err) return res.status(500).send("DB Fehler");
+    db.run("INSERT INTO clips (user_id, link) VALUES (?, ?)", [req.session.user.id, link], () => {
       res.sendStatus(200);
     });
   });
 });
 
-// DELETE Clip
 app.delete("/api/clips/:id", (req, res) => {
   if (!req.session.user) return res.status(401).send("Nicht eingeloggt");
 
-  db.run(
-    "DELETE FROM clips WHERE id = ? AND user_id = ?",
-    [req.params.id, req.session.user.id],
-    (err) => {
-      if (err) return res.status(500).send("DB Fehler");
-      res.sendStatus(200);
-    }
-  );
+  db.run("DELETE FROM clips WHERE id = ? AND user_id = ?", [req.params.id, req.session.user.id], () => {
+    res.sendStatus(200);
+  });
+});
+
+// ===== ADMIN =====
+
+app.get("/api/admin/users", (req, res) => {
+  if (!req.session.user?.is_admin) return res.sendStatus(403);
+
+  db.all("SELECT * FROM users", (err, rows) => {
+    res.json(rows);
+  });
+});
+
+app.post("/api/admin/approve/:id", (req, res) => {
+  if (!req.session.user?.is_admin) return res.sendStatus(403);
+
+  db.run("UPDATE users SET approved = 1 WHERE id = ?", [req.params.id], () => {
+    res.sendStatus(200);
+  });
+});
+
+app.delete("/api/admin/user/:id", (req, res) => {
+  if (!req.session.user?.is_admin) return res.sendStatus(403);
+
+  db.run("DELETE FROM users WHERE id = ?", [req.params.id], () => {
+    res.sendStatus(200);
+  });
 });
 
 // ===== SERVER =====
