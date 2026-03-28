@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Clips Übersicht</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="container">
+
+<h1>🔒 Clipsabruf</h1>
+
+<input id="password" placeholder="Passwort eingeben">
+<button onclick="loadAllClips()">Anzeigen</button>
+
+<div id="clips"></div>
+
+</div>
+
+<script>
+function getEmbedUrl(url) {
+  const parts = url.split("/");
+  const clipId = parts[parts.length - 1];
+  return `https://clips.twitch.tv/embed?clip=${clipId}&parent=${window.location.hostname}`;
+}
+
+async function loadAllClips() {
+  const password = document.getElementById("password").value;
+
+  const res = await fetch("/api/all-clips", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ password })
+  });
+
+  if (!res.ok) {
+    alert("Falsches Passwort");
+    return;
+  }
+
+  const clips = await res.json();
+  const div = document.getElementById("clips");
+
+  div.innerHTML = "";
+
+  clips.forEach(c => {
+    div.innerHTML += `
+      <div class="clip-card">
+        <strong>${c.twitch_name}</strong>
+        <iframe src="${getEmbedUrl(c.link)}" allowfullscreen></iframe>
+      </div>
+    `;
+  });
+}
+</script>
+
+</body>
+</html>
