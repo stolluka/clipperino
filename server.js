@@ -21,7 +21,7 @@ app.get("/auth/twitch", (req, res) => {
 });
 
 app.get("/auth/twitch/callback", async (req, res) => {
-  res.send("Login funktioniert!");
+  res.redirect("/dashboard.html");
 });
 
 const PORT = process.env.PORT || 3000;
