@@ -1,3 +1,16 @@
+function getEmbedUrl(url) {
+  try {
+    if (!url.includes("twitch.tv")) return null;
+
+    const parts = url.split("/");
+    const clipId = parts[parts.length - 1];
+
+    return `https://clips.twitch.tv/embed?clip=${clipId}&parent=${window.location.hostname}`;
+  } catch {
+    return null;
+  }
+}
+
 async function loadClips() {
   const res = await fetch("/api/clips");
 
@@ -12,14 +25,18 @@ async function loadClips() {
   list.innerHTML = "";
 
   clips.forEach(clip => {
-    const li = document.createElement("li");
+    const div = document.createElement("div");
+    div.className = "clip-card";
 
-    li.innerHTML = `
-      <a href="${clip.link}" target="_blank">${clip.link}</a>
-      <button class="delete-btn" onclick="deleteClip(${clip.id})">X</button>
+    const embed = getEmbedUrl(clip.link);
+
+    div.innerHTML = `
+      <div>${clip.link}</div>
+      ${embed ? `<iframe src="${embed}" allowfullscreen></iframe>` : ""}
+      <button class="delete-btn" onclick="deleteClip(${clip.id})">Löschen</button>
     `;
 
-    list.appendChild(li);
+    list.appendChild(div);
   });
 }
 
@@ -31,9 +48,7 @@ async function addClip() {
 
   const res = await fetch("/api/clips", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ link })
   });
 
